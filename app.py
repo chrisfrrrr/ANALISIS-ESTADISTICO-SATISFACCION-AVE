@@ -293,7 +293,7 @@ def add_pdf_watermark(canvas, doc):
     canvas.restoreState()
 
 
-def make_pdf_report(raw, long, item_stats, cat_stats, course_name: str, section_name: str) -> bytes:
+def make_pdf_report(raw, long, item_stats, cat_stats, course_name: str, section_name: str, generated_by: str) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=landscape(letter),
@@ -327,7 +327,7 @@ def make_pdf_report(raw, long, item_stats, cat_stats, course_name: str, section_
         ["PDF analizados", str(total_students), "Respuestas válidas", str(total_answers)],
         ["Promedio global", f"{global_avg:.2f} / 5" if not np.isnan(global_avg) else "Sin datos",
          "Satisfacción global", f"{global_pct:.1f}% - {label}" if not np.isnan(global_pct) else "Sin datos"],
-        ["Fecha de generación", datetime.now().strftime("%d/%m/%Y %H:%M"), "Desarrollador", DEFAULT_AUTHOR],
+        ["Fecha de generación", datetime.now().strftime("%d/%m/%Y %H:%M"), "Generado por", generated_by or "No especificado"],
     ]
     t = Table(info, colWidths=[1.35*inch, 3.55*inch, 1.45*inch, 3.75*inch])
     t.setStyle(TableStyle([
@@ -448,6 +448,8 @@ def main():
         st.subheader("Configuración del informe")
         course_name = st.text_input("Nombre del curso", value="Fundamentos de la Comunicación")
         section_name = st.text_input("Sección", value="")
+        generated_by = st.text_input("Nombre de quien genera el informe", value="", placeholder="Ej. Ing. Christian Pocol")
+        st.caption("Este nombre aparecerá en el informe PDF como responsable de generación. No modifica el crédito del desarrollador ni la marca de agua.")
         max_files = st.number_input("Límite de PDF a procesar", min_value=1, max_value=600, value=600, step=10)
         st.caption(DEVELOPER_LINE)
         st.caption("Carga PDF exportados desde Canvas SpeedGrader con 15 ítems Likert y 2 preguntas abiertas.")
@@ -620,7 +622,7 @@ def main():
         st.dataframe(raw, use_container_width=True, hide_index=True)
 
         excel_bytes = make_excel(raw, long, item_stats, cat_stats)
-        pdf_bytes = make_pdf_report(raw, long, item_stats, cat_stats, course_name, section_name)
+        pdf_bytes = make_pdf_report(raw, long, item_stats, cat_stats, course_name, section_name, generated_by)
 
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
