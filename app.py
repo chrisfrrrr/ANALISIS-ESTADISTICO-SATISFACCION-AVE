@@ -75,7 +75,7 @@ APP_ICON = os.path.join(ASSETS_DIR, "app_icon.ico")
 
 st.set_page_config(
     page_title=APP_TITLE,
-    page_icon="📊",
+    page_icon="​🖥️​",
     layout="wide",
 )
 
