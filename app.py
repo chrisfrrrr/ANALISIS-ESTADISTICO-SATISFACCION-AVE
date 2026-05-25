@@ -435,6 +435,13 @@ def main():
     render_header()
     st.divider()
 
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+    if "report_data" not in st.session_state:
+        st.session_state.report_data = None
+    if "processing_errors" not in st.session_state:
+        st.session_state.processing_errors = []
+
     with st.sidebar:
         if os.path.exists(LOGO_AVE):
             st.image(LOGO_AVE, use_container_width=True)
@@ -449,37 +456,70 @@ def main():
         "Cargar PDF de estudiantes",
         type=["pdf"],
         accept_multiple_files=True,
+        key=f"pdf_uploader_{st.session_state.uploader_key}",
         help="Puede cargar hasta 600 PDF. Se recomienda usar los PDF originales exportados desde Canvas/SpeedGrader."
     )
 
-    if not uploaded_files:
-        st.info("Carga uno o varios PDF para iniciar el análisis estadístico de satisfacción.")
+    col_btn1, col_btn2, col_btn3 = st.columns([1.2, 1.2, 3])
+    with col_btn1:
+        generate_report = st.button("📊 Generar reporte", type="primary", use_container_width=True)
+    with col_btn2:
+        clear_files = st.button("🧹 Limpiar lista de PDF", use_container_width=True)
+    with col_btn3:
+        if uploaded_files:
+            st.caption(f"PDF cargados en la lista: {len(uploaded_files)}")
+        else:
+            st.caption("Aún no hay PDF cargados.")
+
+    if clear_files:
+        st.session_state.uploader_key += 1
+        st.session_state.report_data = None
+        st.session_state.processing_errors = []
+        st.success("Lista de PDF limpiada correctamente.")
+        st.rerun()
+
+    if not uploaded_files and st.session_state.report_data is None:
+        st.info("Carga uno o varios PDF y presiona **Generar reporte** para iniciar el análisis estadístico de satisfacción.")
         st.stop()
 
-    if len(uploaded_files) > max_files:
+    if uploaded_files and len(uploaded_files) > max_files:
         st.error(f"Se cargaron {len(uploaded_files)} archivos, pero el límite configurado es {max_files}.")
         st.stop()
 
-    records = []
-    errors = []
-    progress = st.progress(0, text="Procesando PDF...")
-    for idx, f in enumerate(uploaded_files, start=1):
-        try:
-            records.append(parse_speedgrader_pdf(f.read(), f.name))
-        except Exception as e:
-            errors.append({"archivo": f.name, "error": str(e)})
-        progress.progress(idx / len(uploaded_files), text=f"Procesando {idx}/{len(uploaded_files)} PDF...")
-    progress.empty()
+    if generate_report:
+        if not uploaded_files:
+            st.warning("Primero carga al menos un PDF para poder generar el reporte.")
+            st.stop()
 
+        records = []
+        errors = []
+        progress = st.progress(0, text="Procesando PDF...")
+        for idx, f in enumerate(uploaded_files, start=1):
+            try:
+                records.append(parse_speedgrader_pdf(f.read(), f.name))
+            except Exception as e:
+                errors.append({"archivo": f.name, "error": str(e)})
+            progress.progress(idx / len(uploaded_files), text=f"Procesando {idx}/{len(uploaded_files)} PDF...")
+        progress.empty()
+
+        if not records:
+            st.error("No se pudo procesar ningún PDF.")
+            st.stop()
+
+        st.session_state.report_data = build_dataframes(records)
+        st.session_state.processing_errors = errors
+        st.success("Reporte generado correctamente. Puedes revisar los resultados y descargar los exportables.")
+
+    if st.session_state.report_data is None:
+        st.info("Los PDF ya están cargados. Presiona **Generar reporte** para procesarlos.")
+        st.stop()
+
+    errors = st.session_state.processing_errors
     if errors:
         with st.expander("Archivos con error de procesamiento", expanded=False):
             st.dataframe(pd.DataFrame(errors), use_container_width=True)
 
-    if not records:
-        st.error("No se pudo procesar ningún PDF.")
-        st.stop()
-
-    raw, long, item_stats, cat_stats = build_dataframes(records)
+    raw, long, item_stats, cat_stats = st.session_state.report_data
     valid_answers = int(long["calificacion"].count())
     global_avg = long["calificacion"].mean()
     global_pct = global_avg / 5 * 100 if pd.notna(global_avg) else np.nan
@@ -539,6 +579,16 @@ def main():
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tabs[2]:
+        st.subheader("Interpretación de la distribución Likert")
+        st.markdown("""
+        Esta sección muestra cómo se distribuyen las respuestas de los estudiantes en la escala de satisfacción de 1 a 5 para cada ítem evaluado. 
+        La lectura permite identificar si la percepción del grupo está concentrada en respuestas positivas, neutrales o negativas. 
+        En términos prácticos, una mayor presencia de **5 = Totalmente de acuerdo** y **4 = De acuerdo** indica una percepción favorable del curso; 
+        mientras que una concentración en **3 = Ni de acuerdo ni en desacuerdo** puede reflejar aspectos que no fueron suficientemente claros o consistentes. 
+        Las respuestas **2 = En desacuerdo** y **1 = Totalmente en desacuerdo** deben revisarse como señales de oportunidad de mejora, especialmente cuando aparecen repetidamente en un mismo ítem.
+        """)
+        st.info("La gráfica está apilada por ítem: cada color representa una opción de la escala Likert y la altura total corresponde a la cantidad de respuestas válidas registradas.")
+
         dist = long.dropna(subset=["calificacion"]).groupby(["numero_item", "calificacion"], as_index=False).size()
         dist["respuesta"] = dist["calificacion"].map(LIKERT_MAP)
         fig_dist = px.bar(
