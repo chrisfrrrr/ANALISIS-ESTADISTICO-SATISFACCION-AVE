@@ -308,7 +308,7 @@ def make_pdf_report(raw, long, item_stats, cat_stats, course_name: str, section_
 
     # Header
     header_data = []
-    left_logo = RLImage(LOGO_AVE, width=1.35*inch, height=0.48*inch) if os.path.exists(LOGO_AVE) else Paragraph("AVE UVG", styles["TitleAVE"])
+    left_logo = RLImage(LOGO_AVE, width=1.35*inch, height=0.68*inch) if os.path.exists(LOGO_AVE) else Paragraph("AVE UVG", styles["TitleAVE"])
     right_logo = RLImage(LOGO_UVG, width=0.65*inch, height=0.65*inch) if os.path.exists(LOGO_UVG) else Paragraph("UVG", styles["TitleAVE"])
     title = Paragraph(f"<b>{APP_TITLE}</b><br/><font size='9'>{HEADER_SUBTITLE}<br/>{DEVELOPER_LINE}</font>", styles["TitleAVE"])
     header_table = Table([[left_logo, title, right_logo]], colWidths=[1.7*inch, 7.3*inch, 1.1*inch])
